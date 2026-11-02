@@ -1,0 +1,198 @@
+{
+  "name": "n8n Daily Sales Summary",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 20
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "dc30396a-a3a8-4bd7-8b82-7563837e1d5e",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1XhihW7cOxF7pHtEPgKGdxkPjTnKMvej_Li-W8OXDzi8",
+          "mode": "list",
+          "cachedResultName": "Daily Sales",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1XhihW7cOxF7pHtEPgKGdxkPjTnKMvej_Li-W8OXDzi8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Daily Sales",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1XhihW7cOxF7pHtEPgKGdxkPjTnKMvej_Li-W8OXDzi8/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        0
+      ],
+      "id": "61ab00f5-fe2d-450e-a2e0-464c57a1c41a",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Qi5oTwrxHjdQeVpP",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = $now.toFormat('yyyy-MM-dd');\nconst rows = $input.all()\n  .map(i => i.json)\n  .filter(r => String(r.date).trim() === today);\n\nif (rows.length === 0) {\n  return [{ json: {\n    date: today, orders: 0, totalSales: 0,\n    topItem: 'N/A', itemsSummary: 'No sales recorded today.'\n  } }];\n}\n\nlet totalSales = 0;\nconst byItem = {};\nfor (const r of rows) {\n  const qty = Number(r.quantity) || 0;\n  const price = Number(r.price) || 0;\n  totalSales += qty * price;\n  byItem[r.item] = (byItem[r.item] || 0) + qty;\n}\n\nconst sorted = Object.entries(byItem).sort((a, b) => b[1] - a[1]);\n\nreturn [{ json: {\n  date: today,\n  orders: rows.length,\n  totalSales,\n  topItem: sorted[0][0],\n  itemsSummary: sorted.map(([name, qty]) => `${name}: ${qty}`).join(', ')\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        0
+      ],
+      "id": "a1465370-9059-48df-a1f7-84d78fe59401",
+      "name": "Summarize Sales"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an assistant for a small coffee shop owner. Write a short, friendly end-of-day sales summary (max 4 sentences) and end with one practical suggestion.\n\nDate: {{ $json.date }}\nNumber of sales entries: {{ $json.orders }}\nTotal sales: {{ $json.totalSales }}\nTop item: {{ $json.topItem }}\nItems sold: {{ $json.itemsSummary }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        656,
+        0
+      ],
+      "id": "c4d0f03d-1964-4c4d-9c30-5ba9dc1d8a58",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        656,
+        208
+      ],
+      "id": "64253b4b-2650-42ad-89ac-ad519c940926",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Bhpkv4lLDtiRnmNg",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "okjjjk92@gmail.com",
+        "subject": "=Daily Sales Summary - {{ $('Summarize Sales').first().json.date }}",
+        "message": "=     {{ $json.text }}<br><br>      <b>Total sales:</b> {{ $('Summarize Sales').first().json.totalSales }}<br>      <b>Top item:</b> {{ $('Summarize Sales').first().json.topItem }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1024,
+        0
+      ],
+      "id": "2efbbd3e-b708-496b-8bc8-06ba8a753f66",
+      "name": "Send a message",
+      "webhookId": "6a9c5a99-873a-41cc-a182-56ceac9f9455",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "aMAYtG7Jyxbl3kYY",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Summarize Sales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize Sales": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a49e1d66-23a2-4744-8d7a-91fb3ffb1377",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "3d7ddd6259511cb8b1a09df6983c661d00f50e096914ec0c4545bd0de57f2e8d"
+  },
+  "nodeGroups": [],
+  "id": "BkZzL4l9FWNAm7qd",
+  "tags": []
+}
